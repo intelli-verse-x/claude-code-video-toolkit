@@ -1,12 +1,12 @@
 {
   "name": "hello-world",
   "version": "1.0.0",
-  "description": "Minimal hello-world video — renders in 2 minutes, zero API keys",
+  "description": "Minimal hello-world video \u2014 renders in 2 minutes, zero API keys",
   "scripts": {
     "studio": "npx remotion studio",
     "render": "npx remotion render src/index.ts SprintReview out/video.mp4",
     "render:preview": "npx remotion render src/index.ts SprintReview out/preview.mp4 --scale=0.5",
-    "build": "npx remotion bundle src/index.ts",
+    "build": "node init && npx remotion bundle src/index.ts",
     "upgrade": "npx remotion upgrade"
   },
   "dependencies": {

@@ -1,6 +1,4 @@
 # Environment and secrets
-.env
-.env.local
 .env.*.local
 *.pem
 *.key
@@ -53,7 +51,6 @@ out/
 
 # IDE
 .idea/
-.vscode/
 *.swp
 *.swo
 *~
@@ -128,3 +125,4 @@ playwright/recordings/*.mp4
 
 # Kiro CLI generated skills/steering (scripts/migrate_to_kiro.py)
 .kiro/
+config.bat

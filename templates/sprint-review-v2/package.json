@@ -6,7 +6,7 @@
     "studio": "npx remotion studio",
     "render": "npx remotion render src/index.ts SprintReviewV2 out/sprint-review.mp4",
     "render:preview": "npx remotion render src/index.ts SprintReviewV2 out/preview.mp4 --scale=0.5",
-    "build": "npx remotion bundle src/index.ts",
+    "build": "node init && npx remotion bundle src/index.ts",
     "upgrade": "npx remotion upgrade"
   },
   "dependencies": {
