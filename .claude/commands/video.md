@@ -44,6 +44,7 @@ Which template would you like to use?
   1. Sprint Review - internal demos, release videos
   2. Product Demo - marketing, launches, features
   3. Concept Explainer Short - vertical TikTok/Reels/Shorts explainers
+  4. DS Release Notes - Digital Samba release videos, screens rebuilt from source
 ```
 → Proceed to New Project Flow
 
@@ -131,6 +132,8 @@ Resuming: my-release-video (sprint-review)
 2. **Generate voiceover** (after demos complete)
    Run `/generate-voiceover`
 
+(If the project has no `design.md`, add "Set the design direction: run `/design`" before building more scenes.)
+
 Ready to record the login flow?
 ```
 
@@ -162,7 +165,14 @@ Which template would you like to use?
 | Sprint Review | Internal demos, release videos | title, overview, demo, split-demo, summary, credits |
 | Product Demo | Marketing, launches, features | title, problem, solution, demo, feature, stats, cta |
 | Concept Explainer Short | Vertical 9:16 TikTok/Reels/Shorts explainers | hook, concept cards (Ideogram), b-roll (LTX), recap, cta |
+| DS Release Notes | Digital Samba release videos, nothing screen-recorded | title (item list), one scene per release item, outro |
 ```
+
+> **DS Release Notes carries its own Digital Samba look** (room and account-center kits), so skip the brand
+> question and the brand.ts and brand-asset steps below. Name the project `release-<number>` and set
+> `RELEASE_NUMBER` and `RELEASE_MONTH` in `src/config.ts`. Scenes come from the release notes, not the scene
+> planner: follow "Making the next release" in `templates/ds-release-notes/README.md` and the `synthetic-ui-demo`
+> skill.
 
 > **Concept Explainer Short is Python-based** (moviepy, no Remotion/npm). Its
 > flow differs after scene planning: author `scenes.json` → generate visuals
@@ -216,6 +226,21 @@ What content should this video cover? You can:
 
 ### Phase 3: Scene Planning
 
+**Before proposing scenes, see whether Blender is here** (optional; most installs won't have it):
+
+```bash
+uv run tools/blender_render.py doctor --no-bench   # exit 0: Blender 4.2+ and ffmpeg are ready
+```
+
+- **Exit 0:** where a scene fits one, propose a Blender shot beside the usual visuals, and say why: a character
+  reacting to the news (a gag, a before and after), the scene turning out to be on a laptop as the camera pulls
+  back, the app on a phone or a floating card, a 3D model of the product. One or two in a video is plenty. A video
+  that is 3D from start to finish needs no template: it is one shot spec in the project folder.
+- **Not found:** say nothing and plan as usual. If the user asks for 3D, tell them it needs Blender
+  (`docs/blender.md`, a free install) and offer the nearest thing without it (an LTX clip, `synthetic-ui-demo`).
+
+The spec format and shot grammar are in the `blender` skill.
+
 **Step 1: Propose scene breakdown**
 
 Based on content, propose scenes:
@@ -256,11 +281,37 @@ Help refine:
 | Aspect | Options |
 |--------|---------|
 | Type | title, overview, demo, split-demo, stats, credits, problem, solution, feature, cta |
-| Visual | slide, playwright, external, screenshot |
+| Visual | slide, playwright, external, screenshot, blender (when installed: a shot spec, rendered as a clip) |
 | Narration | Draft voiceover text |
 | Duration | Estimated seconds |
 
-### Phase 4: Project Creation
+### Phase 4: Design Direction
+
+Decide how the video looks before any scene is built, so the scenes are made from the design instead of from the
+template's defaults and restyled afterwards. The scene plan is enough to work from: what each scene says, where the
+story turns, and whether it's 16:9 or 9:16.
+
+1. **Design source.** Ask as in `/design` "Design source" (ours, the installed registry `designSources`, another
+   design skill). Skip the question when the brand or template already fixes the look (DS Release Notes carries
+   its own kits): record `"ours"` and go on.
+2. **Direction for the whole video.** Invoke the source with the scene plan, the audience, the format and the
+   brand (for ours, pick an act palette from `.claude/skills/video-design/palettes.md`). Then invoke `video-design`
+   to map it onto the plan: group the scenes into acts at the story's turns, a field per act, ink, the one accent,
+   the five type steps, a ground from the subject if a field would otherwise be dull.
+3. **Show it before writing it.** A short summary, one line per act, so the user can redirect cheaply:
+
+   ```
+   Design: taste-skill, direction "colour chapters"
+   Act 1 (scenes 1-2, the problem)   near-black field, bone ink, title 120px
+   Act 2 (scenes 3-5, the feature)   brand field, black ink, the product window on a hairline edge
+   Act 3 (scene 6, call to action)   bone field, black ink, the URL at the figure size
+   Accent: brand colour, on the one number the narration lands on
+   ```
+
+The answers are written in Phase 5: `design.md` (format in `.claude/skills/video-design/handoff.md`) and
+`project.json` `design`. `/design` can redo this step later, or run it for a project made without it.
+
+### Phase 5: Project Creation
 
 1. **Copy template:**
    ```bash
@@ -277,6 +328,7 @@ Help refine:
      "created": "{ISO timestamp}",
      "updated": "{ISO timestamp}",
      "phase": "planning",
+     "design": { "source": "{registry key, or the skill's name}", "file": "design.md" },
      "scenes": [...],
      "audio": {
        "voiceover": { "file": "audio/voiceover.mp3", "status": "needed" }
@@ -292,6 +344,9 @@ Help refine:
 4. **Write VOICEOVER-SCRIPT.md:**
    Full script with narration and asset markers
 
+   **Write design.md** from Phase 4, and build the slide scenes from it: its fields, ink, accent and type steps
+   replace the template's theme values where they differ (put them in the theme or brand config, not per scene).
+
 5. **Copy brand assets:**
    Logo from `brands/{brand}/assets/` to `public/images/`
 
@@ -304,7 +359,7 @@ Help refine:
    ```
    (Skip for concept-explainer-short — Python template, no npm.)
 
-### Phase 5: Asset Guidance
+### Phase 6: Asset Guidance
 
 After creation, actively guide asset creation:
 
@@ -318,6 +373,10 @@ You have 2 assets to create:
 
   ⬜ Scene 4: Stats dashboard screenshot
      → Capture with Playwright or provide image
+
+  ⬜ Scene 5: The app on a phone, camera orbiting (Blender)
+     → Write blender/phone.json, `blender_render.py check`, read the contact sheet, then
+       `render --clips --alpha --to projects/<name>/public/blender`
 
 Which would you like to start with?
 ```
@@ -453,6 +512,23 @@ After generation:
 3. Transition phase if appropriate
 4. Add session entry
 5. Regenerate CLAUDE.md
+
+### Music (after the voiceover, when the video wants a bed)
+
+Offer it as a next action once the narration is timed. Generate takes, let the tool rule out the bad ones, then
+let the user choose by ear against the picture:
+
+```bash
+uv run tools/music_gen.py --prompt "..." --duration {video seconds + 5} --variations 4 --output public/audio/bg.mp3
+uv run tools/pick_music.py public/audio/bg_*.mp3 --target {video seconds} --cuts {act cuts, s} --under voice
+# render once without music (move the bed aside), then one mix per take, in seconds:
+uv run tools/audition.py --video out/video.nomusic.mp4 --music public/audio/bg_*.mp3 --volume 0.15 \
+    --recommend --cuts {act cuts, s} --under voice
+```
+
+Show `pick_music.py`'s pick and why, then ask the user to watch the `out/audition/` renders and choose. Copy the
+choice to the project's music file, set `audio.music.status: "present"`, and render. With nobody to ask, take the
+measured pick and record its reasons in the session entry. Prompts and presets: the `acestep` skill.
 
 ---
 

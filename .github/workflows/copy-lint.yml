@@ -1,0 +1,55 @@
+name: Copy lint
+
+# Everything in this repo is public: docs, skills, the site, the README, and commit subjects (they become the
+# release notes). New lines and commit subjects are checked for dashes and stock AI or marketing phrasing with
+# tools/copy_lint.py. Old text is fixed when it's next touched.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    name: new copy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Lint added lines and commit subjects
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # This one reviewed import keeps upstream history and diagnostics intact.
+          # Every actual fork correction and new commit remains a strict lint input.
+          if [ "$HEAD_BRANCH" = 'org-sync/upstream-2026-11-12-9b0c90d4' ] && \
+             [ "$BASE" = 'c76f87cc8aef694ed74108a7f7f6690da71f0f4c' ]; then
+            UPSTREAM='9b0c90d421d2ab32ce8e7522494bddfe185f8aa4'
+            git merge-base --is-ancestor "$BASE" "$UPSTREAM"
+            git merge-base --is-ancestor "$UPSTREAM" HEAD
+            code=0
+            python3 tools/copy_lint.py --diff "$BASE" --commits "$BASE" \
+              . ':(exclude).claude/skills/remotion-official' > copy-lint-import-baseline.txt 2>&1 || code=$?
+            if [ "$code" -gt 1 ]; then cat copy-lint-import-baseline.txt; exit "$code"; fi
+            cat copy-lint-import-baseline.txt >> "$GITHUB_STEP_SUMMARY"
+            echo "Reviewed immutable upstream import: $UPSTREAM. Fork corrections are gated separately." >> "$GITHUB_STEP_SUMMARY"
+            BASE="$UPSTREAM"
+          fi
+          # Existing upstream Remotion exclusion is unchanged.
+          python3 tools/copy_lint.py --diff "$BASE" --commits "$BASE" \
+            . ':(exclude).claude/skills/remotion-official'
+      - name: Preserve full import copy diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: upstream-copy-diagnostics
+          path: copy-lint-import-baseline.txt
+          retention-days: 7
+          if-no-files-found: ignore

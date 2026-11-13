@@ -8,29 +8,497 @@ All notable changes to claude-code-video-toolkit.
 
 ## Unreleased
 
+---
+
+## 2026-11-12 (v0.28.0)
+
+3D arrives as an experimental, optional tool: a JSON shot spec becomes a Blender film, clips for any build, or
+transparent elements inside a Remotion video. Terminal demos get their own component, a brand can hold several
+narrators, and publishing to YouTube gets a whole-video SRT and chapters from the render. The toolkit's own video,
+Made with itself, ships as an example.
+
 ### Added
-- **EchoMimicV3 talking head** (`tools/echomimic3.py` + `docker/modal-echomimic3/`) — diffusion-based
-  audio-driven talking head (Ant Group, Apache 2.0), Modal-only. Preserves the input aspect ratio, so
-  16:9 presenter images come back 16:9 with no `--preprocess` workaround. Runs alongside SadTalker
-  rather than replacing it: ~$0.009/second of output against ~$0.0014, and 22.8-47.8x realtime, so
-  SadTalker stays the right call for small overlays and drafts. Decision table in CLAUDE.md, full
-  detail in `docs/echomimic3.md`. (#77)
-- **`--anchor-retreat`** — fixes a bug where a segment seam landing mid-blink made the next segment
-  start closed-eyed and hold it. Anchor windows are now scored by upper-frame motion and the calmest
-  is chosen, backing off up to N frames. `0` restores the old behaviour. (#77)
-<!-- NOTE: the Kiro entry below already shipped in v0.19.0; left in place rather than silently
-     dropped, but it should come out when this section is cut into a release. -->
-- **Kiro CLI support** (`scripts/migrate_to_kiro.py`) — sibling of the Codex migration script. Installs the toolkit skills into `~/.kiro/skills` (Kiro shares Claude Code's `SKILL.md` frontmatter format, so they copy verbatim), generates a wrapper skill per `.claude/commands/*.md` invoked as the same `/video`, `/setup`, … slash commands, and generates `.kiro/steering/video-toolkit.md` from `CLAUDE.md` inside a managed marker block. Wrappers pin the toolkit's absolute path so commands work from any directory (Claude Code parity — Kiro doesn't walk up the directory tree). Supports `--force`, `--dry-run`, `--reset`, `--workspace-skills`, and `kiro/migration_map.json` for skips/renames. See `docs/kiro.md`.
+
+- **Blender shot specs** (experimental, optional, #214): `tools/blender_render.py check|render spec.json` builds 3D scenes from JSON: a rigged cartoon cast described by body, face, hair, clothes and a seed, a desk set and a product stage, shots by type, and acting beats in seconds or on narration words. `check` verifies every camera by geometry and writes a contact sheet before anything renders. `render --clips --alpha` gives one transparent clip per shot, which `BlenderClip` plays in a Remotion video; a Remotion render can play on the laptop in the scene. Three examples: `blender-disk-panic`, `blender-product-shot` and `blender-in-remotion`. Needs Blender 4.2+; without it nothing changes, and `/video` suggests it only when it is installed.
+- **`Terminal`** in `lib/components` (#207): commands type and output prints on narration cues, with menus and scrolling. `brands/video-toolkit` gives the toolkit its own look, with a terminal palette.
+- **Several narrators per brand** (#207): pick one per video with `voiceover.py --voice`; a brand's ElevenLabs model, settings and `maxWpm` now apply. The toolkit brand narrates with Marilyn and Bren.
+- **`tools/publish_kit.py`** (#211): one whole-video SRT and a chapter at each scene's cut, from a single transcription of the render. `/publish` runs it and passes both to the upload.
+- **`youtube_upload.py --check`** (#211): which channel a login is for, which scopes it has and whether the Data and Analytics APIs are on, with the fix for each.
+- **`youtube_upload.py --video-id`** (#209): adds captions, a thumbnail or a playlist to a video already uploaded.
+- **`examples/toolkit-made-itself`** (#217): the toolkit's own 93 second video, made in the toolkit. Every terminal line is the saved output of the command that made that part. The README and site lead with it.
+- **Show and tell** (#216): Discussions has a place to share videos made with the toolkit, `/contribute` drafts the post from `project.json` and the spend log, and `/publish` offers it after an upload.
 
 ### Changed
-- **`docker/modal-echomimic3/` keeps its weights in a Modal Volume**, unlike the other six Modal apps
-  which bake them into the image. Measured: rebuild after a dependency change is 1.8-8.2s against
+
+- `templates/ds-release-notes` and `examples/ds-release-649` use the DS act palette from `video-design` (#204): flat DS blue title and outro, cool grey cards with navy type.
+- `/video` offers music after the voiceover: `music_gen` takes, `pick_music`'s measured pick, then `audition.py` renders to choose by ear (#210).
+- Official Remotion skills synced to upstream v4.0.542 (#205).
+
+### Fixed
+
+- **`modal_setup.py` deploys on a new Modal workspace** (#212, jdela141252-lab): a workspace created now builds images with builder version 2026.10, which the toolkit's Modal client (1.5) refuses before building anything. The tool now retries a refused deploy with `MODAL_IMAGE_BUILDER_VERSION=2025.06` and keeps it for the rest of the run; a version the user set is left alone, and older workspaces keep their own. `docs/modal-setup.md`, `/setup` and `.env.example` say to export the variable before a deploy by hand.
+- **`qc.py --layout` on Windows** (#213, jdela141252-lab): subprocess output is read as UTF-8, so curly quotes on screen no longer crash the audit, and an empty or broken audit result is reported as an error.
+- `youtube_upload.py` asks for the captions scope and refuses `--captions` on an older token before uploading (#209).
+- `BarChart` grows a highlighted value by scaling it, instead of changing its font size every frame, which crashed Chrome mid-render (#217).
+- `Terminal` draws a line on the frame it is cued for, so a still at that frame shows it (#207).
+- Video jobs draw a local background one step off the caption pill's ink, so the pill no longer vanishes into it (#210).
+- `contact_sheet.py` takes `--at` more than once; `qc.py` messages pass the copy lint (#210).
+- A white picture on a Blender screen no longer fails `check` as blown out (#214).
+
+---
+
+## 2026-11-09 (v0.27.0)
+
+Five contributor tools for working on footage you already have, a stats loop for what you publish, and a copy lint
+on every public word. Real recorded sound effects come from Freesound for free, music ducks under speech, captions
+export as subtitle files, a vertical cut follows a face, and a long recording becomes a highlight reel. The toolkit
+also has a public site now.
+
+### Added
+
+- **`tools/sfx_search.py`** (#181, gulnarjbl): finds and downloads Creative Commons sound effects from Freesound through the Openverse API, with no key. Only commercially usable licences by default, and each download gets an attribution file. Openverse doesn't guarantee its licence data, so check the Freesound page before commercial use.
+- **`addmusic.py --duck` and `--events`** (#161, AsharibAli): the music bed drops under speech and recovers in the pauses, and sound effects land at set times from a JSON list. Every input is brought to 48 kHz stereo before the mix.
+- **`captions.py --srt` and `--vtt`** (#167, AsharibAli): subtitle files beside the caption JSON in the same pass, split at sentence ends, pauses and a word limit; existing caption JSON converts offline.
+- **`cutdown.py --mode track`** (#163, AsharibAli): a social crop that follows one face, holding the last good position on a cut, a second face or a far jump. OpenCV is an optional extra (`uv sync --extra vision`), needed only for this mode.
+- **`tools/highlights.py`** (#162, AsharibAli): picks the final takes from a word-timed transcript and writes the ranges as `cutdown.py` segments.
+- **`tools/youtube_stats.py`** and the `youtube-stats` skill: views, likes and comments per video, plus watch time, retention and traffic sources with the Analytics scope, saved as snapshots so trends show; GitHub traffic beside it.
+- **`tools/copy_lint.py`**: refuses dashes and stock AI or marketing phrasing in anything public. Video jobs and `youtube_upload.py` refuse it, `voiceover.py` warns, and a `Copy lint` CI check runs on new lines and commit subjects.
+- **A GitHub Pages site**: the front page and one page per use case, in the Digital Samba design system, linked as the repo homepage.
+- **A Python tests workflow** in CI for `tools/`, `scripts/`, tests and the registry, and a test for `ltx_extend.py` against a fake continuation.
+
+### Changed
+
+- **`addmusic.py` mixes at the levels you set**: the old mix halved both tracks, so fixed-level mixes now come out about 6 dB louder than before. Run `qc.py --render ... --fix` for delivery loudness as usual.
+- The agent skill (`skills/video-toolkit/`) names every tool above.
+
+### Fixed
+
+- `youtube_upload.py` no longer warns that a scheduled upload came back private.
+- `examples/ds-release-649` marks its browser window `data-qc="product"` for `qc.py --layout`.
+---
+
+## 2026-11-08 (v0.26.0)
+
+Comedy shorts about your own group, and the tools that make generated people hold up in them: clips that
+continue instead of freezing or looping, sound placed on the movement by measurement, and a QC check for motion
+that stops dead. Uploads now carry YouTube's AI-content disclosure, and agent video jobs take a person's own
+photos and clips.
+
+### Added
+
+- **`parody-short` skill**: comedy shorts about a group's own life (a team's launch, a club's season, a family's Christmas) or a shared topic everyone recognises (video calls, the return to the office), told in a borrowed genre (80s action intro, creature feature, Dickens Christmas ad) and starring the group's real, animated photos or an invented cast. It covers mining the group's own chat, docs and tools for in-jokes (with privacy rules), mapping a genre's beats onto the real event, costuming photos with `image_edit` and animating them with LTX, designed voices, vertical cuts and brand editions.
+- **`LivingPhoto`** (`lib/components`) plays an image-to-video clip of a person once and holds its last good frame (`after: 'drift'` with a slow push-in, or `'freeze'` for a freeze-frame gag). `fit` slows a slightly short clip to fill its shot, down to 0.8x; it never loops or plays backwards. `livingFrame()` lets a shot time a gag to the clip.
+- **`tools/ltx_extend.py`** continues an LTX clip from its last good frame instead of looping or freezing it, joining the two with a short cross-fade (`--times` chains more). On an 11 s shot it measured 0% frozen and 0% revisited frames, against 63% frozen when the last frame was held. Continuing from an earlier frame also cuts out a bad stretch. A failed chain keeps the clips it paid for.
+- **`tools/sync_check.py`** places a sound on generated movement and checks it in the render. `--clip` says where in a clip a sound should start so its loudest moment meets the movement; `--video --cues sync-cues.json` measures every cue in a render and exits 1 past 0.1 s. Kinds: `peak` (a sneeze, a laugh), `impact` (where a movement stops, a landing) and `onset` (where a sustained movement starts). Sound paths resolve from the cue file.
+- **`qc.py --render` catches motion that stops dead**: part of the frame moving for 3 s or more, then frozen for 2 s or more while the rest of the video goes on, usually an image-to-video clip that ran out. The whole-frame still check missed these because something else is always moving.
+- **`youtube_upload.py --synthetic-media`** sets YouTube's "altered or synthetic content" disclosure for realistic generated people and cloned voices, and `/publish` asks about it. A privacy policy for the uploader (`docs/privacy.md`) lets its OAuth app run in production mode, so refresh tokens no longer expire weekly.
+- **Agent video jobs take the person's own media**: a kit (`kits/<name>/kit.json`: brand, voice, format and someone's photos, set up once in a session) and `file` scenes from it, a cloned voice in the kit, and a focus map that keeps an off-centre subject in a 9:16 crop. `text` scenes get a local brand-colour background on a host without FLUX, so one-prompt videos run with no GPU provider.
+- **Agent jobs know their host**: `catalog` and presets report the visual kinds, voices, music providers and local tools (ffmpeg, moviepy, Node) this host has, and `submit` refuses a spec that needs a missing one before any spend, naming the env vars and an alternative. Narration and on-screen copy are checked before spend (dashes, stock AI phrasing, narration repeated from an earlier job).
+- **The agent skill opens with a routes table**: which template or skill fits what a user asks, and whether it runs as a one-prompt `job` or a working `session`. `video_job.py catalog` and MCP `video_catalog` list the routes from the registry.
+
+### Fixed
+
+- `youtube_upload.py` checks that the AI-content disclosure survived the upload and sets it with `videos.update` when it didn't (the first two uploads came back without it), and reports `syntheticMedia` in `--json-out`.
+- `ltx_extend.py --times 2` works: the second link no longer seeks to the clip's very last frame, where ffmpeg writes no image.
+- Video jobs take a person's file only from the kit, the agent workspace, the submitting directory or the toolkit; a default spec is no longer refused for want of a music key; `estimate` parses its host lines on Python 3.10.
+
+---
+
+## 2026-11-05 (v0.25.0)
+
+### Added
+
+- **`video-design`, the toolkit's video design layer, takes direction from any design source**: plug in your own design skill, or use ours. taste-skill is the recommended external source, Anthropic's frontend-design is another, and "ours" (video-design's act palettes with the brand) needs nothing installed. It turns a direction into scenes with rules that hold whatever the source says (colour changes only at a narrative turn, one data accent, five type sizes, two-line titles, a ground drawn from the subject's own shape), writes the decisions to the project's `design.md`, and critiques the render from a contact sheet. The project records its source in `project.json` `design.source`.
+- **`/video` sets the design direction before any scene is built**, and `/design` sets or changes it for a project made without one, refines a scene within it, or critiques the render.
+- **`tools/contact_sheet.py`** tiles one settled frame per scene of any render, finding cuts and fades by colour (so two fields of the same lightness still count), or frames at chosen seconds (`--at 4.2,13.8`).
+- **`PageTurns`** (`lib/components`) turns one scene into new pages in place, each on its narration cue, with a hard edge instead of a fade.
+- **Data charts drawn to the narration** (`lib/components/DataChart.tsx`): `LineChart` draws its line to `cue()` keyframes, with cue-timed bands and several series with a legend; `BarChart` highlights and grows bars on cues; `Counter` counts up from a cue; `SplitBar` shows shares of a whole and still labels a zero share. Brand-themed with `chartTheme()`. Reference: `examples/data-chart-stars`.
+- **Synthetic UI scenes cue from the narration**: `cue('save')` (`lib/components/cues.ts`) looks a click frame up from the voice, so cursor, clicks and camera follow a re-timed narration.
+- **`tools/pick_music.py`** recommends one of several music takes with its reasons: it rules out a take shorter than the video, clipping, or with a mid-track gap, then prefers a calm bed under voice or text, some movement, a clean ending and a note on the act cuts. It measures and can't hear, so commands show its pick and ask the user to listen.
+- **`tools/audition.py`** puts each music take under the finished picture in seconds (one render serves every take, mixed at the composition's level and fades, -14 LUFS), so takes are chosen by watching the video. The video's own narration is kept.
+- **`qc.py --allow-silent`** makes a missing or silent audio track info instead of an error, for a deliverable that is silent on purpose (#171).
+- **Agent video jobs resume and report**: `resume JOB_ID` redoes only the missing outputs after a crash, `submit` prunes old jobs' project trees, `status` carries timestamped events, warnings and an ETA calibrated per host, and renders are encoded under 9.5 MB so they attach in Discord. concept-explainer-short builds 3.3x faster (175 s to 53 s on a 52 s video).
+- `Stage` takes `windowShadow` (a hairline edge instead of a drop shadow at rest); `ChartTheme` takes a solid `other` colour; `palettes.md` gains a brand blue + cool grey + navy palette.
+- **`check_versions.py` checks Dependabot coverage**: every project that pins Remotion must be listed in `.github/dependabot.yml`, or the monthly grouped bump skips it. `--strict` fails on a gap, and a new `Check versions` workflow runs it on any PR that touches a `package.json` or `dependabot.yml` (`--remotion-only` skips the Python and toolkit checks).
+
+### Changed
+
+- **The bundled frontend-design skill is removed**: install it (or taste-skill) as a design source instead. Nothing in the toolkit points at `.claude/skills/frontend-design` any more.
+- **The digital-samba brand uses DS's own colours** (wordmark coral #F06859, navy #323E66, product blue #3771e0) instead of an orange that isn't a DS colour.
+- **Remotion 4.0.539** in every template, example and showcase (#152, #154). `templates/ds-release-notes`, `examples/ds-release-649` and `examples/ds-free-schedule-demo` are now in `dependabot.yml`. The official Remotion skills are synced to upstream v4.0.540.
+- **Node 24 LTS** in CI and the docs (18 and 20 are end of life); `verify_setup.py` flags an end-of-life Node.
+
+### Fixed
+
+- **`music_gen.py --variations N` saves N takes** (`name_1` ... `name_N`) instead of one: the acemusic API returns one take per request whatever `batch_size` says. `--json` prints only the JSON on stdout.
+- **`music_gen.py --repaint` and `--cover` keep the input's length** by default instead of cutting it to 30s without saying so. (Separately, hosted repaint on real music doesn't keep the source outside the window; see the roadmap.)
+- `qc.py --layout` reads SVG text colour from its fill, so chart and diagram labels are no longer judged as black text.
+- `SplitBar` stacks two zero shares' labels instead of printing them on top of each other.
+- `contact_sheet.py` samples a scene that fades to blank before its fade-out, finds scenes that fade to the same ground, keeps `--at` times inside the video and refuses `--count 0`.
+- Agent video jobs: captions drop words with no letters or digits, resume never reuses a half-written file, the lock can't be stolen during setup, an LLM-expanded brief is told the clip-prompt rules, and estimates match what jobs actually cost.
+
+---
+
+## 2026-11-01 (v0.24.0)
+
+### Added
+
+- **Agent video jobs (experimental)**: `tools/video_job.py` turns a scene list into a narrated, captioned, QC-checked MP4 as a background job any agent can submit and poll from a fresh process. Cost is estimated and capped before any spend, one job runs at a time, and receipts land in a spend ledger. Scenes can be flat `--scene "narration :: kind: prompt"` strings, so an agent never writes nested JSON, and slipped JSON from open models is repaired. Jobs look finished by default: cloned narration, animated title and headlines over generated backgrounds, a music bed and a contact sheet. The contract is in `docs/agent-video-jobs.md`.
+- **Submit-time guards for agent jobs**: a job is refused before any spend when a clip prompt asks for a screen, names an idea instead of a filmable thing, or is a single word, or when narration only repeats the on-screen headline. Clip prompts get a live-action footage style unless they name one, and a no-people negative unless they cast a person. `HEADLINE ; A -> B -> C` makes a diagram card. Each guard comes from a real failed take.
+- **`tools/video_mcp.py`**: the same estimate, submit, status, result and list calls over MCP for agents without a shell (`uv sync --extra mcp`).
+- **concept-explainer-short renders 16:9** from `config.json`, not only 9:16.
+
+### Changed
+
+- **`skills/openclaw-video-toolkit` is replaced by `skills/video-toolkit`**, written for any agent runtime. Update any path pointing at the old folder.
+- concept-explainer-short crossfades scene joins instead of dipping through black.
+
+### Fixed
+
+- A cancelled or failed job's cost reservation is settled when the job ends, so it no longer counts against an agent's daily cap.
+- **product-demo template text is readable on a phone and passes WCAG AA**: every slide's text is at least 28px at 1080p (it was down to 12px), the problem badges use dark text on the coral (2.8:1 → 6.5:1), and the CTA tagline uses `textMedium` instead of `textLight` (2.6:1 → 5.4:1). The demo window is marked `data-qc="product"`. `qc.py --layout` on the template now reports no text findings.
+
+---
+
+## 2026-10-28 (v0.23.0)
+
+QC learns to look at the picture and the text, not just the sound: `qc.py --render` finds frozen
+stretches, black gaps and an empty first frame, and `qc.py --layout` measures every piece of text for
+size, overflow and contrast. Alongside: a motion-craft reference for Remotion scenes, clone prosody
+tools for cloned voices that come out flat, and the `ds-release-notes` template.
+
+### Added
+
+- **`qc.py --layout` measures the text in the video**: it bundles a Remotion project, opens it in Playwright and seeks a frame a second with Remotion's own hooks (no render), then reports text off the canvas or clipped by its box, text that never reaches 28px at 1080p, and contrast under WCAG AA, grouped by colour pair with a passing colour suggested. Text inside `data-qc="product"` (now set on `Stage`'s browser window) is the product's own UI and is listed apart, as info. On the product-demo template it finds white on the coral badges at 2.78:1 and the grey CTA tagline at 2.58:1. `Stage`'s "AI-generated" note goes from 2.9:1 to 5.3:1. Adapted from HyperFrames' `check` (HeyGen, Apache-2.0). (#136)
+- **`qc.py --render` checks the picture**, not just the loudness. It flags stretches over 3s where nothing on screen changes (`--max-still`), black gaps of 0.5s or more mid-video, and an empty first frame (a warning on vertical and square renders, whose first frame is the Shorts/Reels cover). The still check compares 20px tiles of a 320px-wide copy at 4fps, so a moving cursor or a talking-head PiP counts as change, where ffmpeg's `freezedetect` misses both. It takes about 8s on a 4-minute render; `--skip-frames` turns it off. A render with no audio track, or a silent one, now says which instead of "could not measure loudness". Thresholds follow HyperFrames' `check` craft warnings (HeyGen, Apache-2.0). (#135)
+- **Clone prosody tools**: `tools/voice_prosody.py` measures pitch spread (F0 semitone sd, p5-p95) of any audio and writes a livelier clone reference by expanding the pitch contour around the median and slowing it (Praat PSOLA, `uv sync --extra prosody`). `tools/pick_takes.py` chooses the best take per phrase from several voiceover runs by pace, then pitch spread, stretching only a straggler. Why: a Qwen3 clone copies its reference clip's pace and intonation, and the raw Lugh clip is flat and fast, so every line was time-stretched 0.8x and still monotone. The expanded clip (`assets/voices/lugh-ref-expressive.wav`) gives clones at 3-4 st and 145-165 wpm with no stretch. CLAUDE.md "Clone Prosody" has the workflow. (#133)
+- **`ds-release-notes` template**: the synthetic release-notes video as a reusable Remotion project (room and account-center kits, Stage, cards, SFX, the sentence-level voice pipeline), shipped as the finished Digital Samba release 650 build so it renders as is. Its release number and month live in `src/config.ts`, and `/video` offers it. (#133, #137)
+- **Motion craft reference** (`.claude/skills/remotion/motion-craft.md`): durations and staggers in frames at 30fps, choosing an ease by what the move does, springs named by damping ratio (with Remotion's default `spring()` worked out as ζ = 0.5, i.e. playful), read time for on-screen text, a beat grid that doesn't drift, transitions with a cause, and a list of defaults that make a video look generated, with the toolkit components that produce them. `/design` and `/scene-review` now read it alongside frontend-design. Adapted from HyperFrames (HeyGen, Apache-2.0). (#134)
+
+---
+
+## 2026-10-27 (v0.22.0)
+
+Synthetic UI demos become a toolkit feature: shared `Stage` and `Cursor` components and a
+`synthetic-ui-demo` skill. This release also fixes `glitch` and `checkerboard` transitions that
+distorted scenes even when idle, and syncs the Remotion skills to 4.0.539.
+
+### Added
+
+- **Synthetic UI demos as a toolkit feature**: shared `Stage` and `Cursor` components in `lib/components` (a browser window with camera zoom/pan keyframes and a scripted cursor), and a `synthetic-ui-demo` skill. The skill covers rebuilding an app's screens from its source, a frame-based timeline anchored to the voice lines, measuring click targets from stills, and labelling AI-generated people. `examples/ds-release-649` and `examples/ds-free-schedule-demo` are the reference builds. (#122)
+
+### Fixed
+
+- **Seams across whole scenes with the `glitch` transition**: `TransitionSeries` keeps a scene inside its presentation for the entire sequence, and `glitch` sliced the scene into 8 strips even when idle. The strips were also mis-sized (each was 0.5% too tall, so content drifted a few pixels per strip), which clipped text and image rows every ~135 px for the whole scene before the transition and after it. The idle scene now passes through untouched, and the active slices use exact `clip-path` bands. `checkerboard` had the same idle problem on the entering side (64 clipped copies of the scene after the transition) and now shows the scene whole. `lib/transitions/README.md` notes that presentations must pass idle scenes through, and that `<Audio>` belongs outside the `TransitionSeries` because transitions render a scene several times. (#125)
+
+### Changed
+
+- **Remotion skills synced to upstream 4.0.539** (`remotion-dev/skills` `30d4553`). The markup and interactivity guides are reorganised, with a new Arabic text page and longer colour correction, connected compositions and video editing pages. The toolkit's templates stay on `<OffthreadVideo>`. (#126)
+- **README front page** shows the two synthetic demo videos first under "See What It Makes". (#123, #124)
+
+### Notes
+
+- CommentKeyword (Instagram comment-to-DM for a video's "Comment KEYWORD" call to action) is listed under the README's Community add-ons (#128, #129).
+
+---
+
+## 2026-10-21 (v0.21.1)
+
+Two showcase examples made without screen recording (product UIs rebuilt from source and driven by a
+scripted cursor and camera), two TTS/SFX fixes, and the Remotion skills sync to 4.0.536.
+
+### Added
+
+- **Two synthetic demo examples**: `examples/ds-release-649` (an 80s release-notes video) and `examples/ds-free-schedule-demo` (a 26s product demo). Nothing is screen-recorded. The product screens are rebuilt from their source code and driven by a scripted cursor and camera, narrated by Lugh. (#119)
+
+### Fixed
+
+- **`sfx.py --preset pop` works.** Its 0.3s duration was under ElevenLabs' 0.5s minimum, so every call was rejected. (#118)
+- **`--min-tempo` for the pace clamp** (`voiceover.py`, `qwen3_tts.py`). The 0.85x stretch floor can now go as low as 0.7x, and a take that is still over `--max-wpm` after the clamp is reported as `floored`, with a hint. Before this, voices that rush hard needed a manual atempo afterwards. (#118)
+
+### Changed
+
+- **Remotion skills synced to upstream 4.0.536** (`remotion-dev/skills` `1441a11`). New pages cover colour correction (`effects` on `@remotion/media` `<Video>`) and timeline structure, and the transitions page is rewritten. The toolkit's templates stay on `<OffthreadVideo>`. (#117)
+
+---
+
+## 2026-10-12 (v0.21.0)
+
+Five new production steps: pre-render QC with loudness (`tools/qc.py`), `/thumbnail`,
+one-command Modal setup (`tools/modal_setup.py`), burned captions for the Remotion
+templates (`tools/captions.py` + `<Captions>`) and social cut-downs (`tools/cutdown.py`).
+
+Also a model refresh, checked against each upstream on 2026-10-02. The entries below move
+several defaults to newer releases and add newer models as opt-ins (a deploy-time
+variable for the Modal apps, `--model 4.5` for Ideogram); models not listed keep their
+current version. Endpoint URLs are unchanged, and RunPod images
+are untouched.
+
+### Changed
+- **Remotion skills synced to upstream v4.0.535** (via 4.0.533; #105, #113).
+- **concept-explainer-short captions pick Whisper `turbo` on CUDA.** `whisperModel: "auto"`
+  (the new template default) uses turbo with a GPU and `base` on CPU; an explicit model
+  name still wins. Needs `openai-whisper>=20240930`.
+- **Release notes skip merge commits.** `release.yml` builds the GitHub Release body
+  from `git log --no-merges`, so "Merge pull request" and branch-sync merges no longer
+  appear as bullets; the commits they bring in still do.
+- **`modal-flux2`: FLUX.2-small-decoder** (Apache-2.0, ~1.4x faster decode) and the
+  `diffusers==0.41.0` release in place of the git commit pin. klein-4B stays the
+  default. Modal FLUX edits now default to 4 steps / guidance 1.0 (was 50 / 4.0), as
+  generation already did, since klein is step-distilled; `--steps`/`--guidance`
+  still override.
+- **`modal-image-edit`: `diffusers==0.41.0`** in place of unpinned git main, with
+  transformers 5.17. Both Modal image apps now use the diffusers 0.41.0 release on
+  torch 2.6.0. Qwen-Image-Edit-2511 stays the default, at 8 steps.
+- **`image_edit.py` steps on Modal:** the client still sends 8 steps by default and
+  marks them `steps_is_client_default`, so the app runs its deployed model's default
+  (8 on 2511, 40 on the Qwen-Image-2.1 opt-in). An app deployed from an older version
+  ignores the flag and runs the 8 it is sent; an explicit `--steps` is always honoured.
+  The image cap also follows the deployed model, and the tool prints the `Model:` and
+  `Steps:` that ran.
+- **ACE-Step 1.5 → 1.5 XL Turbo (4B)** (`modal-music-gen`). ACE-Step-1.5 pinned to
+  v0.1.8, weights baked into `checkpoints/` (v0.1.8 no longer reads the HF cache),
+  torch 2.10, `shift=3.0` default. Still fits the A10G.
+- **ElevenLabs:** `scribe_v2` is the STT default in `redub` and `align_captions`.
+  `eleven_v4` added to `voiceover` and `redub` via the Text to Dialogue API
+  (stability + similarity only, chunked above 2,000 characters); `redub --sync` now
+  sends stability + similarity on v4 too. Deprecated ids are still accepted, each
+  with a one-line warning: `eleven_turbo_v2_5` is sent as `eleven_flash_v2_5`,
+  `scribe_v1_experimental` as `scribe_v2`, and `scribe_v1` as is. Default stays
+  `eleven_multilingual_v2`. `elevenlabs>=2.21.0`.
+- **Captions:** `concept-explainer-short` `whisperModel` now defaults to `"auto"` —
+  Whisper `turbo` on CUDA, `base` on CPU. `openai-whisper>=20240930`.
+- **Cost estimates** use Modal's current rates (A100-80GB $2.50/h, was $4.68; H100
+  $3.95/h; L40S added) and the GPU each Modal app actually runs on.
+
+### Added
+- **`tools/qc.py` — pre-render QC + loudness.** One command run before `npm run render`
+  (or `build.py`): missing media referenced by the config, narration longer than its scene
+  (cut off) or >3s shorter (dead air), wpm pacing per scene, and per-scene loudness
+  consistency. `--render out/video.mp4` checks the finished video against YouTube's
+  -14 LUFS / -1 dBTP; nothing in the templates normalises loudness, and the first project
+  checked had shipped at -22.5 LUFS. `--fix` normalises loudness only: scene VO to
+  -16 LUFS in place (originals in `.qc-backup/`), the render to a new `<name>.loudnorm.mp4`
+  with the video stream copied. Reuses `sync_timing.py`'s config parsing and `pacing.py`'s
+  labels; reads Remotion projects and concept-explainer-short `scenes.json`.
+- **`/thumbnail` command.** Generates a 1280×720 YouTube thumbnail for a project.
+  Claude reads the project, script and brand, proposes a 1–3 word hook phrase, writes
+  an Ideogram 4 JSON caption (text on the left, nothing under YouTube's duration badge),
+  renders it with `ideogram4.py --resolution 1280x720`, reads the image back to check the
+  spelling, and records it as `publish.thumbnail` so `/publish` uploads it. ~$0.10 per
+  image.
+- **`tools/modal_setup.py`: one-command Modal setup.** `modal_setup.py qwen3_tts flux2`
+  (or `--all`, which leaves out `ltx2`) deploys each app in turn and writes its endpoint
+  URL into `.env`. It runs SoulX's `populate_weights` first, and reads every URL from
+  Modal's API, not the deploy log, which wraps and truncates long URLs. `--list` shows
+  what's deployed and whether `.env` agrees. `--sync-env` fills `.env` from apps you
+  already deployed, without redeploying. `--recreate` covers variant switches. Failed
+  deploys print a hint (payment method, rate limit, gated Hugging Face access).
+  `qwen3_tts.py --setup --cloud modal` now uses it.
+- **`HF_SECRET_NAME` deploy-time override** for the gated `ltx2` and `flux2` (klein-9B)
+  apps. They still default to the `huggingface-token` secret. Modal's Hugging Face template
+  names the secret `huggingface-secret`, which made first deploys fail. `modal_setup.py`
+  now checks that the secret exists before deploying, and picks up `huggingface-secret`
+  automatically; `--hf-secret NAME` overrides it.
+- **Burned captions for the Remotion templates.** `tools/captions.py` transcribes narration
+  (ElevenLabs Scribe or local whisper) and writes a word-level `<name>.captions.json` beside each
+  audio file, aligned to the scene's `.txt` script so names are spelled as written. A new shared
+  `<Captions>` component (`lib/components`) renders it with karaoke highlighting; sprint-review,
+  sprint-review-v2 and product-demo show captions automatically once the JSON exists
+  (`captions: { enabled: false }` turns them off). No new npm dependency.
+- **Social cut-downs** (`tools/cutdown.py`): reframe a finished 16:9 video to 9:16, 1:1
+  or 4:5 for Shorts, Reels, TikTok and feeds. Three modes: `blur` (whole frame over a
+  blurred copy, the default), `crop` (fill the frame, with `--focus` choosing which part
+  to keep) and `pad` (solid colour, or a brand's `bgDark`). `--start/--end` keeps one
+  range; repeated `--segment` joins several into a highlight reel, with a 30ms audio
+  fade at each join and an optional crop focus per segment. Several `--format`s render
+  in one call. `--platform` warns past the 3-minute Shorts/Reels limit, and fitted
+  modes warn when the source shrinks enough to make burned captions small. Pure ffmpeg,
+  works on any MP4, no project needed.
+- **Opt-in non-commercial models, chosen at deploy time.** Licences differ, so the
+  Apache-2.0 models stay the default and the newer ones need an explicit switch:
+  - `FLUX2_MODEL=klein-9b` deploys FLUX.2-klein-9B (gated, FLUX Non-Commercial
+    licence, outputs need review) on an L40S.
+  - `IMAGE_EDIT_MODEL=qwen-image-2.1` deploys Qwen-Image-2.1 (`QwenImage21Pipeline`,
+    up to 10 input images, RGBA; Qwen Research licence, non-commercial).
+  The endpoint URL is unchanged either way, and the tools print the `Model:` that ran.
+- **SoulX-FlashHead Lite** (`soulx.py --model lite`): a drafts-only alternative to
+  SadTalker; long-take drift unmeasured (tested on ~2.6s clips). ~8x faster per chunk
+  than Pro at ~$0.0004 per second of output, no torch.compile. Sizes snap to a 32px
+  grid. Lite is unloaded before any Pro render.
+- **Ideogram 4.5 as an opt-in** (`ideogram4.py --model 4.5`), posted as multipart to
+  `/v2/image/generate/ideogram-4-5`. `--speed` maps to its quality tiers: TURBO,
+  DEFAULT and QUALITY → low $0.03, medium $0.06 and high $0.10, the same prices as on
+  Ideogram 4; FLASH, which has no Ideogram 4 price, → low. `--resolution` is checked against 4.5's size rules; the six
+  Ideogram 4 presets that break them (720x1280, 1280x720, 720x1440, 1440x720,
+  1296x3168, 3168x1296) exit 2 with a suggested size. Ideogram 4 stays the default and
+  sends the same requests as before; its cost log now shows QUALITY at $0.10 (was
+  $0.09) and warns that FLASH currently returns HTTP 400. Run live, 4.5 renders JSON
+  captions near-perfectly but adds garbled filler text to plain prompts, so use it with
+  `--json`. 4.0 stays the default because 1280x720 (YouTube, `/thumbnail`) is off 4.5's grid.
+- **LTX-2.5 as a deploy-time opt-in** (`LTX2_VERSION=2.5` on `modal-ltx2`). LTX-2.3
+  stays the default and its image is unchanged, so redeploying 2.3 rebuilds nothing.
+  2.5 runs LTX-2 v1.4.2 on torch 2.13 / CUDA 13.0 with the gated `Lightricks/LTX-2.5`
+  weights (Gemma 4 text encoder bundled), pinned to one HF revision. LTX-2.x Community
+  licence: free under $10M annual revenue, commercial use included; watermark and
+  provenance features must not be removed. Same endpoint and request format; responses
+  gain a `model` field, which `ltx2.py` prints as `Model:`. The `crt-terminal` LoRA was
+  trained on 2.3 and doesn't keep its look on 2.5. Benchmarked against 2.3 at the
+  default size, for image-to-video and with the LoRA (table in `docs/ltx2.md`): 2.5 is
+  about 25-45% slower per clip, so 2.3 stays the default.
+
+### Fixed
+- **`modal-flux2` and `modal-image-edit` crash-looped on fresh builds** (seen as an
+  endless cold start): open-ended `transformers` now needs torch 2.6, so both images
+  move to torch 2.6.0 (#106). The RunPod flux2 and qwen-edit Dockerfiles get the same
+  bump, and their pip specifiers are now quoted, since the shell had been reading `>=`
+  as a redirect and dropping every version floor. RunPod images are not rebuilt yet.
+- **Modal setup docs:** every GPU app needs a payment method on a new workspace, not
+  just the A100s (A10G deploys fail too). Also documented: Modal's Hugging Face secret
+  template defaults to the name `huggingface-secret`, `ltx2` needs access to Google's
+  gated Gemma 3 repo, deploy output wraps long endpoint URLs across lines, and
+  switching an opt-in should use `modal deploy --strategy recreate`.
+
+### Notes
+- Upload-Post (multi-platform publishing) is listed under the README's Community
+  add-ons (#103, #107).
+- `FLUX2_MODEL=klein-9b` needs the `huggingface-token` Modal secret too (gated
+  weights), like `modal-ltx2`.
+- `qwen-tts` pinned to 0.1.1 in `modal-qwen3-tts`; no newer Qwen TTS model exists.
+  SoulX-FlashHead, Real-ESRGAN and ProPainter are already on their latest releases.
+
+---
+
+## 2026-10-02 (v0.20.2)
+
+Patch release. Fixes two first-deploy failures on Modal (LTX-2, SoulX) and the
+Windows cp1252 crashes, moves Remotion to 4.0.529, and rewrites the contribution
+policy for hosted services.
+
+### Added
+- **`concept-explainer-short`: `voice.brand`** in `config.json` now drives the
+  narrator from a brand profile. `gen_vo.py` never passed `--brand`, so a brand
+  could set the palette but not the voice. Empty or absent adds no flag. Picked
+  up from #84. (#88)
+- **Community add-on: arkiv** — natural-language search over your own footage
+  archive, listed in the README. (#100)
+
+### Changed
+- **Remotion 4.0.518 → 4.0.529** across all templates, examples, showcase and
+  the render-baseline harness, via the first grouped Dependabot bump. The
+  baseline A/B rendered identical on every frame, and all nine Remotion
+  projects smoke-render on the new version. (#97)
+- **Official Remotion skills synced to 4.0.529**, so the skills and the pinned
+  version match again. New upstream material: connected compositions, motion
+  blur, editable SVG paths. (#83, #92)
+- **Contribution policy for hosted services** rewritten. Integrations that need
+  a hosted third-party service default to Community add-ons; the providers
+  in-tree are there because a maintainer uses and can test each one, and the
+  route in is an issue before any code. The old wording contradicted the tree
+  and invited the PRs it then declined. (#99)
+- **`/contribute`** asks what actually differs before copying a template, and
+  routes colors, fonts, voice and timing to `/brand`. Two PRs had arrived as
+  near-identical template forks because the command told them to. (#89)
+- The Remotion skills sync now updates the registry's `upstreamVersion`, which
+  had been left at 4.0.518 through two syncs.
+
+### Fixed
+- **Windows: tools and Modal setup died on cp1252.** Python picks the locale
+  codec for redirected output, so printing `→` or `⚠` raised
+  `UnicodeEncodeError`, and `modal deploy` aborted mid-build on its own
+  progress output. New `tools/win_encoding.py` guards the affected tools, and
+  `/setup` documents `PYTHONIOENCODING=utf-8`. Thanks @randomdill1 (#91).
+- **`qwen3_tts.py --setup --cloud modal`** reported "could not parse endpoint
+  URL" after a successful deploy, because Modal wraps long URLs across lines.
+  (#91, hardened in #98 for URLs on a non-final branch of the output tree.)
+- **LTX-2 Modal app** (`docker/modal-ltx2/app.py`) cloned upstream unpinned, so
+  any deploy after upstream's August 2026 releases crashed on import with
+  `module 'torch.compiler' has no attribute 'nested_compile_region'` (upstream
+  now needs torch 2.13; the app installs 2.7). The clone is pinned to the commit
+  the pipeline code was written against. Existing deployments are unaffected
+  until they are redeployed. Thanks @nevesen (#94).
+- **SoulX-FlashHead** deployed before `populate_weights` ran crash-looped with a
+  bare `FileNotFoundError` while the client hung until its timeout. The app now
+  starts anyway and every request returns a readable error naming the command to
+  run; a warm container picks the weights up without a redeploy. `/setup` now
+  includes SoulX (populate, then deploy) and `verify_setup.py` checks both the
+  endpoint and the weights volume. Thanks @nevesen (#95).
+- **SoulX GPU tier** is a deploy-time setting (`SOULX_GPU=L40S modal deploy …`)
+  instead of a hard-coded A10G, which OOMs at 1280x720 (#95).
+- **Modal timeouts and 5xx errors** now point at `modal app logs`, since a
+  container crashing on startup looks the same as a slow cold start from the
+  client (#94, #95).
+
+---
+
+## 2026-09-08 (v0.20.1)
+
+Patch release. v0.20.0 shipped with two tools that aborted with a `NameError`
+before doing any work; both are fixed here.
+
+### Fixed
+- **Codex and Kiro migrations** (`scripts/migrate_to_codex.py`,
+  `scripts/migrate_to_kiro.py`) — `write_text()` was dropped by the
+  `_migrate_common` extraction without being moved to the shared module, so
+  `--force` aborted with `NameError: name 'write_text' is not defined` on the
+  first real write. `--dry-run` returned before that path, which is why it went
+  unnoticed. Restored in `_migrate_common`, and the two orphaned function bodies
+  the same refactor left stranded are gone. Thanks @Anai-Guo (#85).
+- **`tools/dewatermark.py --setup`** — `setup_runpod()` called
+  `get_runpod_config()`, which is defined nowhere in the repo, so the documented
+  one-time setup crashed immediately. Now uses the `load_dotenv()` +
+  `os.getenv("RUNPOD_API_KEY")` pattern `tools/upscale.py` already uses (#86).
+- **`_migrate_common.load_mapping`** returned raw JSON instead of the normalized
+  shape, so any caller would `KeyError` on `mapping["skip_commands"]`. It was
+  unreachable only because both scripts shadowed it with a local copy. The real
+  version is now shared and the duplicates (plus a duplicate `find_repo_root`
+  and an unused `yaml_quote` import) are gone — verified byte-identical
+  migration output before and after (#86).
+
+### Added
+- **`Lint Python` CI workflow** — gates on undefined names
+  (`ruff --select F821,F811,F822,F823`) across `scripts/` and `tools/`.
+  Deliberately narrow: only rules where a hit is a real defect, not style. Run
+  against the v0.20.0 tree it reports 26 errors, including both `write_text`
+  sites. There was previously no Python lint in CI (#86).
+
+---
+
+## 2026-08-31 (v0.20.0)
+
+### Added
+- **SoulX-FlashHead talking head** (`tools/soulx.py` + `docker/modal-soulx/`) — the toolkit's
+  default talking head generator (Soul AI Lab, Apache 2.0, 1.3B), Modal-only. Preserves the
+  input aspect ratio, so 16:9 presenter images come back 16:9 with no `--preprocess`
+  workaround, and `--size` snaps to the model's latent grid while keeping the aspect. It is
+  the default because identity holds over a long take: measured at **97% of frame-zero
+  sharpness at 70s, flat across 72 segments**, so per-scene generation is a choice rather
+  than a workaround. ~$0.0024 per second of output against SadTalker's ~$0.0014. Decision
+  table in CLAUDE.md, full detail in `docs/soulx.md`. (#81)
+
+### Changed
+- **`docker/modal-soulx/` keeps its weights in a Modal Volume**, unlike the other Modal apps
+  which bake them into the image. Measured: redeploy after a code change is ~2.3s against
   79-385s baked, while cold start and generation speed are unchanged. Needs a one-off
-  `modal run …::populate_weights`. The settled apps stay baked. (#76)
-- Upstream repo ref and all four model revisions in `modal-echomimic3` pinned by SHA — weights in a
-  Volume aren't tied to the image, so nothing else prevents drift. (#76, same lesson as #71/#74)
-- **`NarratorPiP`** honours its `objectPosition` prop, which was declared and documented but silently
-  ignored by a hardcoded value, and gains an `objectFit` prop (default `contain`, unchanged behaviour).
+  `modal run …::populate_weights` (14.7 GB). The settled apps stay baked.
+- Upstream repo ref and both model revisions in `modal-soulx` pinned by SHA — weights in a
+  Volume aren't tied to the image, so nothing else prevents drift. (same lesson as #71/#74)
+- **`NarratorPiP`** honours its `objectPosition` prop, which was declared and documented but
+  silently ignored by a hardcoded value, and gains an `objectFit` prop (default `contain`,
+  unchanged behaviour).
+- `tools/cloud_gpu.py` learned `soulx`, including its GPU tier, so its jobs report a cost
+  estimate.
+
+### Removed
+- **EchoMimicV3** (`tools/echomimic3.py`, `docker/modal-echomimic3/`, `docs/echomimic3.md`),
+  added earlier in this unreleased cycle and never part of a tagged release. Identity drift
+  made it unusable for real narration: on a controlled A/B — same photo, same 80s audio,
+  same 544x736 — it fell to 50% of frame-zero sharpness by 70s, collapsing to a featureless
+  smear, where SoulX-FlashHead held 97%. The failure is absorbing rather than gradual, since
+  each segment re-anchors on the previous one's output, so it could not be tuned out; it
+  implied a ~30s render ceiling that shaped the surrounding design. SoulX supersedes it on
+  every axis that mattered — drift, cost (~3.7x cheaper), wall clock (~3-6x faster) — while
+  keeping aspect-ratio preservation. (#81, closes #80)
 
 ---
 
