@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -26,6 +25,7 @@ env:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       images: ${{ steps.changes.outputs.images }}
     steps:
@@ -33,30 +33,48 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0  # full history needed to diff across multi-commit pushes
+          persist-credentials: false
 
       - name: Detect changed images
         id: changes
+        env:
+          REQUESTED_IMAGE: ${{ github.event.inputs.image }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          if [ -n "${{ github.event.inputs.image }}" ]; then
-            # Manual dispatch with specific image
-            echo "images=[\"${{ github.event.inputs.image }}\"]" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          valid_image() {
+            [[ "$1" =~ ^[a-z0-9][a-z0-9._-]*$ ]] && [ -f "docker/$1/Dockerfile" ]
+          }
+          if [ -n "$REQUESTED_IMAGE" ]; then
+            # Inputs remain data; reject traversal, shell syntax and unknown images.
+            valid_image "$REQUESTED_IMAGE" || { echo 'Invalid image selection' >&2; exit 1; }
+            IMAGES=$(jq -cn --arg image "$REQUESTED_IMAGE" '[$image]')
           else
-            # Diff across the full push range, not just HEAD~1..HEAD
-            BASE="${{ github.event.before }}"
+            BASE="$BEFORE_SHA"
             if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
               BASE="HEAD~1"
             fi
-            CHANGED=$(git diff --name-only "$BASE" HEAD -- 'docker/*/Dockerfile' 'docker/*/handler.py' | \
-              sed 's|docker/\([^/]*\)/.*|\1|' | sort -u | jq -R . | jq -sc .)
-            if [ "$CHANGED" = "[]" ]; then
-              # Fallback: only build images that have a Dockerfile (modal-* dirs use Python API at deploy time)
-              CHANGED=$(for d in docker/*/; do [ -f "$d/Dockerfile" ] && basename "$d"; done | jq -R . | jq -sc .)
+            CANDIDATES=$(git diff --name-only "$BASE" HEAD -- 'docker/*/Dockerfile' 'docker/*/handler.py' |
+              sed 's|docker/\([^/]*\)/.*|\1|' | sort -u)
+            if [ -z "$CANDIDATES" ]; then
+              CANDIDATES=$(for d in docker/*/; do [ ! -f "$d/Dockerfile" ] || basename "$d"; done)
             fi
-            echo "images=$CHANGED" >> $GITHUB_OUTPUT
+            IMAGES='[]'
+            while IFS= read -r image; do
+              [ -n "$image" ] || continue
+              # Removed images are omitted; every emitted matrix value is validated.
+              [ -f "docker/$image/Dockerfile" ] || continue
+              valid_image "$image" || { echo 'Invalid image directory' >&2; exit 1; }
+              IMAGES=$(jq -cn --argjson images "$IMAGES" --arg image "$image" '$images + [$image]')
+            done <<< "$CANDIDATES"
           fi
-          echo "Images to build: $(cat $GITHUB_OUTPUT | grep images)"
+          echo "images=$IMAGES" >> "$GITHUB_OUTPUT"
 
   build:
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 90
     needs: detect-changes
     if: needs.detect-changes.outputs.images != '[]'
     runs-on: ubuntu-latest
@@ -67,13 +85,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Check Dockerfile exists
+        env:
+          IMAGE: ${{ matrix.image }}
         run: |
-          if [ ! -f "docker/${{ matrix.image }}/Dockerfile" ]; then
-            echo "No Dockerfile found for ${{ matrix.image }}, skipping"
-            exit 0
-          fi
+          [[ "$IMAGE" =~ ^[a-z0-9][a-z0-9._-]*$ ]] && [ -f "docker/$IMAGE/Dockerfile" ]
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
