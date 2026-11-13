@@ -19,6 +19,7 @@ on:
   push:
     branches:
       - main
+      - 'org-sync/upstream-*'
     paths:
       - 'tools/**'
       - 'lib/blender/**'
