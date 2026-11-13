@@ -25,6 +25,7 @@ On invocation, assess current state and adapt:
 1. Check .env exists — if not, create from .env.example
 2. Read current .env values (which keys are set vs placeholder)
 3. Check prerequisites: node --version, uv --version, ffmpeg -version
+   (verify_setup.py also reports optional components: Blender)
 4. Check Python deps: uv run python -c "import dotenv; import requests"
 5. Check Modal CLI: uv run modal --version (if installed)
 6. Check for existing Modal apps: uv run modal app list (if authenticated)
@@ -39,7 +40,7 @@ Show a clear status overview before asking anything:
 Toolkit Setup
 
 Prerequisites:
-  [check] Node.js 20.x
+  [check] Node.js 24.x
   [check] Python 3.12
   [check] FFmpeg 7.1
   [check] Python deps installed (uv)
@@ -48,6 +49,7 @@ Cloud GPU:      Not configured
 File transfer:  Not configured (using free fallback services)
 Voice:          Not configured
 ElevenLabs:     Not configured (optional, paid)
+3D (Blender):   Not installed (optional)
 
 Let's get you set up! We'll go through each feature one at a time.
 You can skip any step and come back later with /setup.
@@ -74,7 +76,7 @@ Check and report. Don't install anything automatically — just tell the user wh
 
 ### Required
 
-- **Node.js 18+**: `node --version`. If missing: "Install from https://nodejs.org/ — needed to render videos"
+- **Node.js 22+ (24 LTS recommended)**: `node --version`. If missing: "Install from https://nodejs.org/ — needed to render videos". If it is 18 or 20, it still works, but both are end of life: suggest `nvm install 24 && nvm alias default 24`
 - **Claude Code**: Already running if they're seeing this command
 
 ### Recommended
@@ -82,6 +84,45 @@ Check and report. Don't install anything automatically — just tell the user wh
 - **uv**: `uv --version`. If missing: "Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux) or `powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"` (Windows) — manages Python and all toolkit dependencies; needed for AI voiceover, image editing, and all cloud GPU tools"
 - **Python deps**: `uv run python -c "import dotenv; import requests"`. If missing: run `uv sync` from the toolkit root (uv installs a compatible Python automatically if needed)
 - **FFmpeg**: `ffmpeg -version`. If missing: "Install with `brew install ffmpeg` (macOS) or see https://ffmpeg.org/ — needed for media conversion"
+
+### Optional
+
+- **Blender 4.2+**: reported by `verify_setup.py` under "Optional" (or `uv run tools/blender_render.py doctor
+  --no-bench`). Only `tools/blender_render.py` uses it (3D character shots, reveals and product shots from a shot
+  spec), and it is experimental. If it's found, say so in the status and that `/video` will suggest 3D shots where
+  they fit. If it isn't, show one line ("3D (Blender): not installed, optional") and move on: don't count it as
+  missing, and install nothing. `docs/blender.md` has the install command per platform.
+
+### Windows only
+
+**Export `PYTHONIOENCODING=utf-8` before running any deploy command in this wizard.** On
+Windows, a piped/captured stdout defaults to the `cp1252` codec. Modal's deploy progress
+output contains box-drawing characters it cannot encode, so `modal deploy` aborts partway
+through the image build with:
+
+```
+'charmap' codec can't encode characters in position 3-42: character maps to <undefined>
+```
+
+The build itself is fine — only the *printing* fails, which makes this look like a broken
+deploy or a network problem rather than an encoding one. Every deploy in Phase 4 fails
+identically without it.
+
+Set it for the shell you run the deploys in:
+
+```bash
+export PYTHONIOENCODING=utf-8   # Git Bash
+$env:PYTHONIOENCODING = 'utf-8' # PowerShell
+```
+
+Offer to make it permanent so the user does not hit this again outside this wizard:
+
+```powershell
+[Environment]::SetEnvironmentVariable('PYTHONIOENCODING','utf-8','User')
+```
+
+See `docs/modal-setup.md` for the rest of the Windows prerequisites (notably the
+Microsoft Store `python3` stub).
 
 ### Output
 
@@ -107,7 +148,7 @@ Explain what cloud GPU enables:
 - AI image editing (Qwen-Edit) — transform photos, add effects
 - AI upscaling (RealESRGAN) — enhance image quality
 - AI music generation (ACE-Step) — background music, jingles
-- Talking heads (SadTalker) — animated presenters from a photo
+- Talking heads (SoulX-FlashHead, SadTalker) — animated presenters from a photo
 - Watermark removal (ProPainter) — clean up stock footage
 
 Then present the choice:
@@ -119,7 +160,7 @@ Frame the pitch:
 - All 7 toolkit tools typically cost $0.50-2.00/month with normal use
 - Faster cold starts than RunPod
 - Scale to zero — no charges when idle
-- Simple deployment: `uv run modal deploy docker/modal-xxx/app.py`
+- Simple deployment: `uv run tools/modal_setup.py <app>` (deploys and writes `.env`)
 
 Setup flow:
 ```
@@ -243,13 +284,15 @@ Which AI tools would you like to set up?
      Free AI voiceovers — 9 speakers, voice cloning, tone presets
      This is the most-used tool in the toolkit.
 
-  2. [recommended] Images (FLUX.2 Klein)
+  2. [recommended] Images (FLUX.2 klein)
      Generate title backgrounds, scene illustrations, thumbnails
      Fast: ~3s per image on warm GPU
+     Default klein-4B (Apache-2.0); klein-9B is a non-commercial opt-in
 
-  3. Image Editing (Qwen-Image-Edit)
+  3. Image Editing (Qwen-Image-Edit-2511)
      Transform photos — add/remove objects, change style, backgrounds
-     Note: Large model, ~8 min cold start on first use
+     Note: Large model, ~2 min cold start
+     Qwen-Image-2.1 is a non-commercial opt-in (up to 10 input images)
 
   4. Upscaling (RealESRGAN)
      Enhance image quality 2x or 4x with AI
@@ -259,9 +302,11 @@ Which AI tools would you like to set up?
      Generate background music, jingles, vocals
      8 scene presets: corporate, ambient, dramatic, tension, cta...
 
-  6. Talking Heads (SadTalker)
+  6. Talking Heads (SoulX-FlashHead + SadTalker)
      Animate a portrait photo with lip-sync from audio
      Great for narrator Picture-in-Picture
+     SoulX is the default (Modal only, one-off 15GB weights download);
+     SadTalker is the cheap draft option
 
   7. Watermark Removal (ProPainter)
      Remove watermarks from video using AI inpainting
@@ -274,27 +319,40 @@ Recommend "all" — with Modal's free tier, there's no cost to having them deplo
 
 ### Modal Deployment Flow
 
-For each selected tool, run `uv run modal deploy` and capture the endpoint URL:
+Deploy the selected apps with `tools/modal_setup.py`. It deploys one at a time (Modal
+rate-limits parallel `AppCreate`), runs SoulX's `populate_weights` first, reads each
+endpoint URL from Modal's API, and writes it to `.env`. Don't parse URLs out of the deploy
+log yourself, because Modal wraps and truncates them.
 
 ```bash
-# Deploy each app and capture the URL from output
-uv run modal deploy docker/modal-qwen3-tts/app.py
-uv run modal deploy docker/modal-flux2/app.py
-uv run modal deploy docker/modal-image-edit/app.py
-uv run modal deploy docker/modal-upscale/app.py
-uv run modal deploy docker/modal-music-gen/app.py
-uv run modal deploy docker/modal-sadtalker/app.py
-uv run modal deploy docker/modal-propainter/app.py
+# Windows: required, or the deploys die with a 'charmap' codec error mid-build.
+# Harmless everywhere else.
+export PYTHONIOENCODING=utf-8
+
+uv run tools/modal_setup.py --all                       # "all of the above"
+uv run tools/modal_setup.py qwen3_tts flux2 soulx       # or just the chosen ones
 ```
 
-After each deploy, Modal prints the endpoint URL. Parse it and save to .env:
-```
-MODAL_QWEN3_TTS_ENDPOINT_URL=https://username--video-toolkit-qwen3-tts-...modal.run
-MODAL_FLUX2_ENDPOINT_URL=https://username--video-toolkit-flux2-...modal.run
-```
+Map menu choices to app names: `qwen3_tts`, `flux2`, `image_edit`, `upscale`,
+`music_gen`, `sadtalker`, `soulx`, `dewatermark` (ProPainter). `--all` deploys these
+eight. `ltx2` is never included: offer it separately, and only after the user confirms
+the Hugging Face secret and their Gemma 3 access (see `docs/modal-setup.md`).
 
-**Important**: The deploy output contains the URL. Look for lines containing `.modal.run` in the output. The URL format is typically:
-`https://{username}--{app-name}-{class}-{method}.modal.run`
+Deploys stream their logs and can take 5-15 minutes each on a first build, so run the
+command in the background and report each app's `OK`/`!!` line as it lands. A failed app
+prints a hint (payment method, rate limit, Hugging Face access, image builder version);
+fix it and re-run with just that app's name.
+
+On a new Modal workspace the first deploy fails at once with `This version of the modal
+client supports the following image builder versions ... You are using '2026.10'`, and
+the tool retries it with `MODAL_IMAGE_BUILDER_VERSION=2025.06`, which the rest of the run
+keeps. That is expected: the workspace defaults to a builder version newer than the
+toolkit's Modal client knows. Don't stop the run or upgrade `modal`. Only a deploy by
+hand needs the variable exported first (see `docs/modal-setup.md`).
+
+If the user already deployed some apps by hand, `uv run tools/modal_setup.py --sync-env`
+writes the live URLs to `.env` without redeploying anything. `--list` shows what's
+deployed and whether `.env` agrees.
 
 ### RunPod Deployment Flow
 
@@ -402,7 +460,7 @@ Mention: "You can also use /voice-clone later to clone your own voice for a pers
 Setup Complete!
 
 Prerequisites:
-  [check] Node.js 20.x
+  [check] Node.js 24.x
   [check] Python 3.12
   [check] FFmpeg 7.1
   [check] Python deps (uv)
@@ -424,6 +482,8 @@ Voice: Qwen3-TTS (Ryan)
   [check] Test generation successful
 
 ElevenLabs: Not configured (optional)
+
+3D: Blender 5.3 found (optional, experimental) — /video will suggest 3D shots
 
 Cost summary:
   - Modal: $30/mo free compute (you'll use ~$1-2/mo typical)
@@ -474,6 +534,9 @@ lines = Path('.env').read_text().splitlines()
 ## Error Handling
 
 - If `modal deploy` fails: show the error, suggest checking `uv run modal app logs`, offer to retry
+- If a deploy by hand says `You are using '2026.10'` after a list of image builder versions:
+  export `MODAL_IMAGE_BUILDER_VERSION=2025.06` in that shell and re-run (`modal_setup.py`
+  does this on its own)
 - If R2 test fails: re-check credentials, common issue is wrong bucket name or region
 - If RunPod setup fails: check API key, check account has billing enabled
 - If any step fails, don't block subsequent steps — mark as failed and continue
