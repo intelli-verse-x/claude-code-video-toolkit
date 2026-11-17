@@ -23,6 +23,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# Node 18 and 20 are end of life (April 2025, April 2026); 22 is in maintenance and 24 is the active LTS.
+MIN_NODE_MAJOR = 22
+RECOMMENDED_NODE_MAJOR = 24
+
+
 def check_command(cmd: list[str]) -> tuple[bool, str]:
     """Check if a command exists and return its version."""
     try:
@@ -41,13 +46,21 @@ def check_prerequisites() -> list[dict]:
     """Check required and optional prerequisites."""
     results = []
 
-    # Node.js (required)
+    # Node.js (required). Still works on an end-of-life major, so it passes with a nudge.
     ok, version = check_command(["node", "--version"])
+    detail = version if ok else "Install from https://nodejs.org/"
+    if ok:
+        try:
+            major = int(version.lstrip("v").split(".")[0])
+        except ValueError:
+            major = None
+        if major is not None and major < MIN_NODE_MAJOR:
+            detail += f" (end of life; install Node {RECOMMENDED_NODE_MAJOR} LTS, e.g. nvm install {RECOMMENDED_NODE_MAJOR})"
     results.append({
         "name": "Node.js",
         "required": True,
         "ok": ok,
-        "detail": version if ok else "Install from https://nodejs.org/",
+        "detail": detail,
     })
 
     # Python (recommended)
@@ -168,6 +181,31 @@ def check_modal_apps() -> dict:
         return {"ok": False, "apps": [], "detail": str(e)[:200]}
 
 
+def check_soulx_weights() -> dict:
+    """Check the SoulX weights volume was populated.
+
+    SoulX is the one app that keeps its weights in a Modal Volume instead of
+    baking them into the image, so it deploys fine with nothing to load.
+    """
+    try:
+        result = subprocess.run(
+            ["modal", "volume", "ls", "soulx-weights", "/SoulX-FlashHead-1_3B", "--json"],
+            capture_output=True, text=True, timeout=30,
+        )
+        # A missing directory prints an error box rather than JSON.
+        populated = result.returncode == 0 and bool(json.loads(result.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        populated = False
+
+    if populated:
+        return {"ok": True, "detail": "weights volume populated"}
+    return {
+        "ok": False,
+        "detail": "soulx-weights volume looks empty — run "
+                  "`uv run modal run docker/modal-soulx/app.py::populate_weights`",
+    }
+
+
 def check_modal_env_vars() -> list[dict]:
     """Check which Modal endpoint URLs are configured."""
     tools = {
@@ -176,6 +214,7 @@ def check_modal_env_vars() -> list[dict]:
         "MODAL_IMAGE_EDIT_ENDPOINT_URL": "Image Editing (Qwen-Edit)",
         "MODAL_UPSCALE_ENDPOINT_URL": "Upscaling (RealESRGAN)",
         "MODAL_MUSIC_GEN_ENDPOINT_URL": "Music (ACE-Step)",
+        "MODAL_SOULX_ENDPOINT_URL": "Talking Heads (SoulX-FlashHead)",
         "MODAL_SADTALKER_ENDPOINT_URL": "Talking Heads (SadTalker)",
         "MODAL_DEWATERMARK_ENDPOINT_URL": "Watermark Removal (ProPainter)",
         "MODAL_LTX2_ENDPOINT_URL": "Video (LTX-2)",
@@ -281,6 +320,25 @@ def test_cloud_endpoint(tool_name: str, provider: str = "modal") -> dict:
         return {"ok": False, "detail": str(e)[:200]}
 
 
+def check_optional() -> list[dict]:
+    """Optional components: reported, never counted as missing."""
+    candidates = [os.environ.get("BLENDER"), shutil.which("blender"),
+                  "/Applications/Blender.app/Contents/MacOS/Blender",
+                  str(Path.home() / "Applications/Blender.app/Contents/MacOS/Blender")]
+    for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramW6432")):
+        if base:
+            candidates += sorted(Path(base).glob("Blender Foundation/Blender*/blender.exe"), reverse=True)
+    candidates += ["/usr/bin/blender", "/usr/local/bin/blender", "/snap/bin/blender", "/opt/blender/blender"]
+    binary = next((str(c) for c in candidates if c and Path(c).exists()), None)
+    ok, version = check_command([binary, "--version"]) if binary else (False, "")
+    return [{
+        "name": "Blender",
+        "required": False,
+        "ok": ok,
+        "detail": f"{version} at {binary}" if ok else "not installed (3D shots with tools/blender_render.py; docs/blender.md)",
+    }]
+
+
 def main():
     import argparse
 
@@ -301,6 +359,15 @@ def main():
             status = "OK" if p["ok"] else ("MISSING" if p["required"] else "not found")
             req = " (required)" if p["required"] else ""
             print(f"  {'[x]' if p['ok'] else '[ ]'} {p['name']}{req}: {p['detail']}")
+        print()
+
+    # 1b. Optional components (never part of "ready")
+    optional = check_optional()
+    results["optional"] = optional
+    if verbose:
+        print("Optional:")
+        for p in optional:
+            print(f"  {'[x]' if p['ok'] else '[-]'} {p['name']}: {p['detail']}")
         print()
 
     # 2. Cloudflare R2
@@ -330,6 +397,14 @@ def main():
         results["modal_apps"] = modal_apps
         if verbose:
             print(f"  Deployed apps: {modal_apps['detail']}")
+        if "video-toolkit-soulx" in modal_apps["apps"]:
+            soulx_weights = check_soulx_weights()
+            results["soulx_weights"] = soulx_weights
+            if verbose:
+                print(f"  {'[x]' if soulx_weights['ok'] else '[ ]'} SoulX weights: {soulx_weights['detail']}")
+    if verbose and modal_configured < len(modal_env):
+        print("  Deploy + fill .env: uv run tools/modal_setup.py <app> | --all "
+              "(--sync-env if already deployed)")
     print()
 
     # 4. RunPod

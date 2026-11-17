@@ -107,18 +107,49 @@ grep -r "/your-command" README.md CLAUDE.md
 4. Update documentation if needed
 5. Submit a PR with a clear description
 
-### Integrations that depend on a single paid service or local software
+### Integrations that depend on a hosted service or local software
 
-If your integration only works against one paid API or a piece of software we can't bundle, keep
-it in your own repo and open an issue to be listed under **Community add-ons** in the README.
-In-tree integrations need at least one open or self-hostable path.
+An integration that needs a hosted third-party service, or software we can't bundle, lives in
+your own repo. Open an issue with a link and a one-line description and we'll list it under
+**Community add-ons** in the README.
+
+The toolkit does carry a few hosted providers: ElevenLabs, 60db, Ideogram 4 and acemusic. Each is
+there because a maintainer uses it, holds an account, and can run it against the live API when
+something breaks. That is the bar, and a PR can't meet it on a maintainer's behalf — code we
+can't run is code we can't keep working.
+
+If you think a hosted service belongs in-tree, **open an issue before writing any code**. Say
+what it does that the toolkit can't already do; another place to run a model we already run
+isn't that. If a maintainer wants to adopt it, we'll take it from there.
+
+### Design skills
+
+Plug in your own design skill, or use ours: the toolkit's own source is `video-design` with the brand, and it bundles
+no third-party design skill. `/design` and `/scene-review` take direction from whichever one the
+user has installed (the README's "Design sources"), and `video-design` applies the video rules. To have yours
+listed, open an issue with a link, its licence (it must allow use in published videos), the `design.md` it
+produced for `examples/data-chart-stars`, and that example's contact sheet
+(`uv run tools/contact_sheet.py examples/data-chart-stars/out/data-chart-stars.mp4`), so sources can be compared
+on the same video. Listed skills stay in their own repos. Details: `.claude/skills/video-design/sources.md`.
+
+### Brand profiles and new templates
+
+If your video differs from an existing template only in colors, fonts, logo, narrator voice, or
+timing values, you want a **brand profile**, not a new template. Templates take their palette and
+voice from a brand (`voice.brand` in `config.json` resolves `brands/<name>/voice.json`), and
+timings like `lead`/`tail`/`xfade` belong in your own project's `config.json`. Copying a template
+to change those leaves you with a fork that no longer inherits fixes to the original.
+
+Brand profiles work fine without being committed here, so keep yours local unless other people
+would genuinely use it. A new template in-tree needs to differ in its composition code — new
+scenes, structure, or rendering — not just its look.
 
 ### Automated and AI-generated PRs
 
 Automated or AI-generated PRs are welcome only when a human author responds to review and the
 PR states why the toolkit needs the feature — cost, license, and how it differs from the tools
-already here (e.g. a hosted alternative to a self-hosted generator must say when to choose it).
-PRs with no human response within 14 days are closed without further review.
+already here. PRs with no human response within 14 days are closed without further review.
+Integrations with hosted services follow the section above whoever, or whatever, wrote them.
 
 ## Toolkit Tracking Files
 

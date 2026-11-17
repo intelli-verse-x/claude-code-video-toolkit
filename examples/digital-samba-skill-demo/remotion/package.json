@@ -5,14 +5,14 @@
   "scripts": {
     "studio": "remotion studio",
     "render": "remotion render src/index.ts DigitalSambaSkillDemo out/digital-samba-skill-demo.mp4",
-    "build": "remotion bundle"
+    "build": "node init && remotion bundle"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.518",
-    "@remotion/player": "4.0.518",
+    "@remotion/cli": "4.0.539",
+    "@remotion/player": "4.0.539",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remotion": "4.0.518"
+    "remotion": "4.0.539"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

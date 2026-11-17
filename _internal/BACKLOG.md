@@ -86,16 +86,6 @@ Playwright-based web app exploration and analysis:
 - Color contrast guidelines
 - Audio description patterns
 
-### Frontend-Design Skill Rework
-The current frontend-design skill is generic web-focused. Rework to be Remotion/video-specific:
-- Frame-based animation patterns (not CSS transitions)
-- Remotion primitives: `interpolate`, `spring`, `Sequence`, `Series`
-- Video-appropriate motion (30fps constraints, render performance)
-- Slide component patterns (TitleSlide, StatsSlide, etc.)
-- Visual narrative arc across scenes
-- Color/typography choices that work at video resolution
-- Remove web-specific guidance (responsive, hover states, etc.)
-
 ---
 
 ## Templates
@@ -105,12 +95,6 @@ The current frontend-design skill is generic web-focused. Rework to be Remotion/
 - Progress indicator
 - Step-by-step sections
 - Code highlighting
-
-### Changelog Template
-- Version header
-- Feature list with icons
-- Breaking changes section
-- Compact format
 
 ### Comparison Template
 - Before/After split screen
@@ -123,7 +107,6 @@ The current frontend-design skill is generic web-focused. Rework to be Remotion/
 
 ### Still Needed
 - CodeHighlight (syntax-highlighted code blocks)
-- ClickRipple (mouse click effect for demos)
 - TypeWriter (animated text typing effect)
 
 ### NarratorPiP API Refinement
@@ -156,20 +139,10 @@ Document best practices for creating narrator PiP videos:
 
 ## Infrastructure
 
-### Asset Validation Script
-Pre-render check:
-- All referenced videos exist
-- All audio files exist
-- Duration matches config
-- TypeScript compiles
-
 ### Multi-Format Output
-Render pipeline for:
-- MP4 (primary)
+Render pipeline for (square and vertical cut-downs are done in `tools/cutdown.py`):
 - WebM (web fallback)
 - GIF (preview/social)
-- Square format (social)
-- Vertical format (mobile/stories)
 
 ### Python Compatibility
 The documentation uses `python` but macOS and some systems require `python3`:
